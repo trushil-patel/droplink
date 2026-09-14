@@ -5,6 +5,7 @@ import { useDropzone } from 'react-dropzone';
 import { io, Socket } from 'socket.io-client';
 import { QRCodeSVG } from 'qrcode.react';
 import { Check, Copy, Download, File as FileIcon, Link2, LoaderCircle, ShieldCheck, UploadCloud, Wifi, X } from 'lucide-react';
+import FullHome from './full-home';
 
 type Role = 'sender' | 'receiver';
 type Item = { id: string; name: string; size: number; received: number; complete: boolean };
@@ -15,7 +16,7 @@ const bytes = (n: number) => n < 1048576 ? `${Math.ceil(n / 1024)} KB` : `${(n /
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default function DropLinkApp() {
-  const [role, setRole] = useState<Role>('sender'); const [code, setCode] = useState(makeCode);
+  const [role, setRole] = useState<Role>('sender'); const [code, setCode] = useState(makeCode); const [showHome, setShowHome] = useState(false);
   const [files, setFiles] = useState<File[]>([]); const [status, setStatus] = useState('Choose files, then share your pairing code.');
   const [error, setError] = useState(''); const [connected, setConnected] = useState(false); const [sending, setSending] = useState(false); const [progress, setProgress] = useState(0); const [incoming, setIncoming] = useState<Item[]>([]);
   const socket = useRef<Socket | null>(null); const peer = useRef<RTCPeerConnection | null>(null); const channel = useRef<RTCDataChannel | null>(null);
