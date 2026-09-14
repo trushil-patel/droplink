@@ -5,7 +5,11 @@ import { Server } from 'socket.io';
 // Relays WebRTC negotiation metadata only; no file bytes ever reach this service.
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, { cors: { origin: process.env.CLIENT_ORIGIN ?? 'http://localhost:3000' } });
+app.get('/', (_request, response) => response.status(200).json({ service: 'DropLink signaling', status: 'ok' }));
+const allowedOrigins = process.env.CLIENT_ORIGIN?.split(',').map(origin => origin.trim()).filter(Boolean);
+const io = new Server(httpServer, {
+  cors: { origin: allowedOrigins?.length ? allowedOrigins : true, methods: ['GET', 'POST'] }
+});
 const rooms = new Map<string, Set<string>>();
 
 io.on('connection', socket => {
@@ -16,6 +20,7 @@ io.on('connection', socket => {
     members.add(socket.id); rooms.set(room, members); socket.join(room); socket.to(room).emit('peer-ready');
   });
   socket.on('signal', ({ code, payload }) => socket.to(`drop-${code}`).emit('signal', payload));
-  socket.on('disconnecting', () => socket.rooms.forEach(room => { const members = rooms.get(room); members?.delete(socket.id); if (!members?.size) rooms.delete(room); }));
+  socket.on('disconnecting', () => socket.rooms.forEach(room => { const members = rooms.get(room); members?.delete(socket.id); socket.to(room).emit('peer-left'); if (!members?.size) rooms.delete(room); }));
 });
-httpServer.listen(Number(process.env.SIGNAL_PORT ?? 3001), () => console.log('DropLink signaling on :3001'));
+const port = Number(process.env.PORT ?? process.env.SIGNAL_PORT ?? 3001);
+httpServer.listen(port, () => console.log(`DropLink signaling on :${port}`));
