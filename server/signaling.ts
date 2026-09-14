@@ -29,7 +29,11 @@ io.on('connection', socket => {
     if (members.size === 2) console.log(`Pairing code ${code} matched; beginning WebRTC negotiation`);
     socket.to(room).emit('peer-ready');
   });
-  socket.on('signal', ({ code, payload }) => socket.to(`drop-${code}`).emit('signal', payload));
+  socket.on('signal', ({ code, payload }) => {
+    const messageType = typeof payload?.type === 'string' ? payload.type : 'unknown';
+    console.log(`Relaying WebRTC ${messageType} for pairing code ${code}`);
+    socket.to(`drop-${code}`).emit('signal', payload);
+  });
   socket.on('disconnecting', () => socket.rooms.forEach(room => { const members = rooms.get(room); members?.delete(socket.id); socket.to(room).emit('peer-left'); if (!members?.size) rooms.delete(room); }));
   socket.on('disconnect', () => console.log(`Client disconnected: ${socket.id}`));
 });
