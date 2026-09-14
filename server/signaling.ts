@@ -13,14 +13,25 @@ const io = new Server(httpServer, {
 const rooms = new Map<string, Set<string>>();
 
 io.on('connection', socket => {
+  console.log(`Client connected: ${socket.id}`);
   socket.on('join', ({ code }: { code: string }) => {
-    if (!/^\d{6}$/.test(code)) return socket.emit('pairing-error', 'Invalid connection code');
+    if (!/^\d{6}$/.test(code)) {
+      console.warn(`Rejected invalid pairing code from ${socket.id}`);
+      return socket.emit('pairing-error', 'Invalid connection code');
+    }
     const room = `drop-${code}`, members = rooms.get(room) ?? new Set<string>();
-    if (members.size >= 2) return socket.emit('pairing-error', 'This connection already has two devices');
-    members.add(socket.id); rooms.set(room, members); socket.join(room); socket.to(room).emit('peer-ready');
+    if (members.size >= 2) {
+      console.warn(`Rejected third device for pairing code ${code}`);
+      return socket.emit('pairing-error', 'This connection already has two devices');
+    }
+    members.add(socket.id); rooms.set(room, members); socket.join(room);
+    console.log(`Client joined pairing code ${code}; ${members.size}/2 device(s) connected`);
+    if (members.size === 2) console.log(`Pairing code ${code} matched; beginning WebRTC negotiation`);
+    socket.to(room).emit('peer-ready');
   });
   socket.on('signal', ({ code, payload }) => socket.to(`drop-${code}`).emit('signal', payload));
   socket.on('disconnecting', () => socket.rooms.forEach(room => { const members = rooms.get(room); members?.delete(socket.id); socket.to(room).emit('peer-left'); if (!members?.size) rooms.delete(room); }));
+  socket.on('disconnect', () => console.log(`Client disconnected: ${socket.id}`));
 });
 const port = Number(process.env.PORT ?? process.env.SIGNAL_PORT ?? 3001);
 httpServer.listen(port, () => console.log(`DropLink signaling on :${port}`));
