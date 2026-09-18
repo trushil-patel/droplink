@@ -71,7 +71,7 @@ export default function DropLinkApp() {
   const [files, setFiles] = useState<TransferFile[]>([]);
   const [rawFiles, setRawFiles] = useState<File[]>([]);
   const session = useSession();
-  const [connected, setConnected] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [device, setDevice] = useState("Tanishq’s MacBook Pro");
   const [theme, setTheme] = useState("Dark");
@@ -79,6 +79,13 @@ export default function DropLinkApp() {
     setScreen(x);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("join")?.replace(/\D/g, "") ?? "";
+    if (/^\d{6}$/.test(code)) {
+      setJoinCode(code);
+      setScreen("receive");
+    }
+  }, []);
   return (
     <main className="canvas">
       <div className="fixed inset-0 noise pointer-events-none" />
@@ -103,6 +110,7 @@ export default function DropLinkApp() {
             key="receive"
             go={go}
             session={session}
+            initialCode={joinCode}
           />
         )}{" "}
         {screen === "transfer" && (
@@ -472,11 +480,14 @@ function Send({
 function Receive({
   go,
   session,
+  initialCode,
 }: {
   go: (s: Screen) => void;
   session: Session;
+  initialCode: string;
 }) {
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(initialCode);
+  useEffect(() => setCode(initialCode), [initialCode]);
   return (
     <Page>
       <Top
