@@ -36,8 +36,10 @@ io.on('connection', socket => {
     }
     members.add(socket.id); rooms.set(room, members); socket.join(room);
     console.log(`Client joined pairing code ${code}; ${members.size}/2 device(s) connected`);
-    if (members.size === 2) console.log(`Pairing code ${code} matched; beginning WebRTC negotiation`);
-    socket.to(room).emit('peer-ready');
+    if (members.size === 2) {
+      console.log(`Pairing code ${code} matched; notifying devices to begin WebRTC negotiation`);
+      io.to(room).emit('peer-ready');
+    }
   });
   socket.on('signal', ({ code, payload }) => {
     const messageType = typeof payload?.type === 'string' ? payload.type : 'unknown';
