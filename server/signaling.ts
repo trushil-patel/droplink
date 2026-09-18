@@ -21,9 +21,17 @@ const io = new Server(httpServer, {
   }
 });
 const rooms = new Map<string, Set<string>>();
+const trustedDevices = new Map<string, { token: string; socketId: string }>();
 
 io.on('connection', socket => {
   console.log(`Client connected: ${socket.id}`);
+  socket.on('register-device', ({ code, token }: { code: string; token: string }) => {
+    if (!/^[A-Z0-9-]{6,24}$/.test(code) || token.length < 24) return socket.emit('pairing-error', 'Invalid trusted-device registration');
+    trustedDevices.set(code, { token, socketId: socket.id });
+    socket.join(`trusted-${code}`);
+    console.log(`Trusted device registered: ${code}`);
+    socket.emit('device-ready', { code });
+  });
   socket.on('join', ({ code }: { code: string }) => {
     if (!/^\d{6}$/.test(code)) {
       console.warn(`Rejected invalid pairing code from ${socket.id}`);
@@ -41,13 +49,23 @@ io.on('connection', socket => {
       io.to(room).emit('peer-ready');
     }
   });
-  socket.on('signal', ({ code, payload }) => {
+  socket.on('join-trusted-device', ({ code, token }: { code: string; token: string }) => {
+    const trusted = trustedDevices.get(code);
+    if (!trusted || trusted.token !== token || !io.sockets.sockets.has(trusted.socketId)) return socket.emit('pairing-error', 'Trusted device is offline or the link is invalid');
+    socket.join(`trusted-${code}`);
+    console.log(`Sender joined trusted device: ${code}`);
+    io.to(`trusted-${code}`).emit('peer-ready');
+  });
+  socket.on('signal', ({ code, payload, trusted }) => {
     const messageType = typeof payload?.type === 'string' ? payload.type : 'unknown';
     console.log(`Relaying WebRTC ${messageType} for pairing code ${code}`);
-    socket.to(`drop-${code}`).emit('signal', payload);
+    socket.to(trusted ? `trusted-${code}` : `drop-${code}`).emit('signal', payload);
   });
   socket.on('disconnecting', () => socket.rooms.forEach(room => { const members = rooms.get(room); members?.delete(socket.id); socket.to(room).emit('peer-left'); if (!members?.size) rooms.delete(room); }));
-  socket.on('disconnect', reason => console.log(`Client disconnected: ${socket.id}; reason: ${reason}`));
+  socket.on('disconnect', reason => {
+    for (const [code, device] of trustedDevices) if (device.socketId === socket.id) trustedDevices.delete(code);
+    console.log(`Client disconnected: ${socket.id}; reason: ${reason}`);
+  });
 });
 const port = Number(process.env.PORT ?? process.env.SIGNAL_PORT ?? 3001);
 httpServer.listen(port, () => console.log(`DropLink signaling on :${port}`));
