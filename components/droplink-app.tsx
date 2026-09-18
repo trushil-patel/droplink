@@ -211,30 +211,29 @@ function Landing({ go }: { go: (s: Screen) => void }) {
         <div>
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-300/20 bg-blue-400/10 px-3 py-1.5 text-sm text-blue-200">
             <span className="h-1.5 w-1.5 rounded-full bg-blue-300" />
-            Private device-to-device transfers
+            // P2P_TRANSFER_PROTOCOL / ONLINE
           </div>
           <h1 className="max-w-2xl text-5xl font-semibold leading-[1.04] tracking-[-.055em] sm:text-7xl">
-            Instantly transfer files{" "}
+            Ship files, not uploads. {" "}
             <span className="bg-gradient-to-r from-blue-300 to-white bg-clip-text text-transparent">
-              between your devices.
+              Browser to browser.
             </span>
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-8 text-slate-300">
-            Share anything directly from your laptop to your phone. No accounts,
-            no uploads, no limits.
+            A zero-account, direct-transfer terminal for your own devices. No cloud bucket. No upload queue.
           </p>
           <div className="mt-9 flex flex-wrap gap-3">
             <button
               onClick={() => go("send")}
               className="flex items-center gap-2 rounded-full bg-white px-6 py-3.5 font-semibold text-slate-950 shadow-xl shadow-blue-950/30"
             >
-              Send files <ArrowRight size={18} />
+              Open console <ArrowRight size={18} />
             </button>
             <button
               onClick={() => go("receive")}
               className="glass flex items-center gap-2 rounded-full px-6 py-3.5 font-semibold"
             >
-              Receive files <Download size={18} />
+              Receive packet <Download size={18} />
             </button>
           </div>
           <div className="mt-10 flex items-center gap-4 text-sm text-slate-400">
