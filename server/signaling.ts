@@ -6,9 +6,19 @@ import { Server } from 'socket.io';
 const app = express();
 const httpServer = createServer(app);
 app.get('/', (_request, response) => response.status(200).json({ service: 'DropLink signaling', status: 'ok' }));
-const allowedOrigins = process.env.CLIENT_ORIGIN?.split(',').map(origin => origin.trim()).filter(Boolean);
+const allowedOrigins = process.env.CLIENT_ORIGIN?.split(',')
+  .map(origin => origin.trim().replace(/\/$/, ''))
+  .filter(Boolean);
 const io = new Server(httpServer, {
-  cors: { origin: allowedOrigins?.length ? allowedOrigins : true, methods: ['GET', 'POST'] }
+  cors: {
+    origin: (origin, callback) => {
+      const normalized = origin?.replace(/\/$/, '');
+      const isAllowed = !allowedOrigins?.length || !normalized || allowedOrigins.includes(normalized);
+      callback(isAllowed ? null : new Error(`Origin not allowed: ${origin}`), isAllowed);
+    },
+    methods: ['GET', 'POST'],
+    credentials: false,
+  }
 });
 const rooms = new Map<string, Set<string>>();
 
