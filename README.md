@@ -1,5 +1,7 @@
 # DropLink
 
+For a full explanation of the architecture, stack, pairing flow, deployment, troubleshooting, and next improvements, see [the DropLink technical guide](docs/DROPLINK_GUIDE.md).
+
 DropLink sends selected files directly between browsers using encrypted WebRTC data channels. Socket.IO only relays connection metadata; it never receives file contents.
 
 ## Local development
