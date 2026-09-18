@@ -47,7 +47,7 @@ io.on('connection', socket => {
     socket.to(`drop-${code}`).emit('signal', payload);
   });
   socket.on('disconnecting', () => socket.rooms.forEach(room => { const members = rooms.get(room); members?.delete(socket.id); socket.to(room).emit('peer-left'); if (!members?.size) rooms.delete(room); }));
-  socket.on('disconnect', () => console.log(`Client disconnected: ${socket.id}`));
+  socket.on('disconnect', reason => console.log(`Client disconnected: ${socket.id}; reason: ${reason}`));
 });
 const port = Number(process.env.PORT ?? process.env.SIGNAL_PORT ?? 3001);
 httpServer.listen(port, () => console.log(`DropLink signaling on :${port}`));
