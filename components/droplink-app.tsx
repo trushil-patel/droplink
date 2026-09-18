@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { QRCodeSVG } from "qrcode.react";
 import { io, Socket } from "socket.io-client";
+import TrustedDevicePanel from "./trusted-device-panel";
 import {
   ArrowRight,
   Check,
@@ -93,6 +94,7 @@ export default function DropLinkApp() {
       <>
         <Landing go={go} />
         <section id="transfer-console" className="relative z-10 mx-auto max-w-7xl px-5 pb-16 lg:px-8">
+          <TrustedDevicePanel />
           <div className="dev-console mb-6 overflow-hidden rounded-[28px] border border-cyan-300/20 bg-[#071426]/90 shadow-2xl shadow-cyan-950/20">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-300/15 px-5 py-4"><div><p className="font-mono text-xs uppercase tracking-[.2em] text-cyan-300">DropLink / transfer-console</p><p className="mt-1 text-sm text-slate-400">One page. Direct transfers. No cloud storage.</p></div><div className="flex gap-2">{(["send", "receive", "transfer"] as Screen[]).map(mode => <button key={mode} onClick={() => setScreen(mode)} className={`rounded-lg px-3 py-2 font-mono text-xs uppercase ${screen === mode ? "bg-cyan-300 text-slate-950" : "bg-white/5 text-slate-300 hover:bg-white/10"}`}>{mode}</button>)}</div></div>
             <p className="px-5 py-3 font-mono text-xs text-emerald-300">● {session.connected ? "PEER_CONNECTED" : "SYSTEM_READY"} <span className="ml-2 text-slate-500">{session.status}</span></p>
