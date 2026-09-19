@@ -134,11 +134,14 @@ export default function DropLinkApp() {
         }
       } else if (metadata.current) {
         chunks.current.push(data);
+        // React may run this updater after the end message clears metadata.
+        // Capture the values now instead of reading a mutable ref in the updater.
+        const totalBytes = metadata.current.size;
+        const receivedBytes = (data as ArrayBuffer).byteLength;
         setProgress((value) =>
           Math.min(
             99,
-            value +
-              ((data as ArrayBuffer).byteLength / metadata.current!.size) * 100,
+            value + (totalBytes > 0 ? (receivedBytes / totalBytes) * 100 : 0),
           ),
         );
       }
