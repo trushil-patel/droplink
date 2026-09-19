@@ -12,7 +12,7 @@ npm.cmd run signal # Socket.IO at http://localhost:3001
 npm.cmd run dev    # Next.js UI at http://localhost:3000
 ```
 
-Copy `.env.example` to `.env.local` and fill in your Metered settings before starting Next.js. Use two browsers/devices: select files on the sender, enter the receiver's six-digit code, request transfer, accept on the receiver, then send the files.
+Copy `.env.example` to `.env.local` and fill in your Metered settings before starting Next.js. Use two browsers/devices: select files on the sender, enter the receiver's six-digit code, request transfer, then accept on the receiver. The selected files start transferring automatically when the secure connection opens.
 
 ## Deploy the signaling server on Render
 
@@ -52,7 +52,7 @@ Every push to the selected GitHub branch triggers a new Render deployment. When 
 1. In Vercel, set `METERED_DOMAIN` to your Metered domain (for example `your-app.metered.live`).
 2. Set `METERED_TURN_API_KEY` to the credential-specific API key from Metered. Do not use an account master secret or add a `NEXT_PUBLIC_` prefix.
 3. Set these for each deployment environment you use, then redeploy. Keep `NEXT_PUBLIC_SIGNALING_URL` pointing to Render; TURN does not replace signaling.
-4. Open the new deployment on two devices, one on Wi-Fi and one on mobile data. Request and accept a small file transfer, then send it. Confirm the receiver downloads the correct file.
+4. Open the new deployment on two devices, one on Wi-Fi and one on mobile data. Request and accept a small file transfer. It starts automatically; confirm the receiver downloads the correct file.
 
 The Next.js `/api/ice-servers` endpoint fetches credentials server-side without caching or returning the API key. Browsers receive the TURN username/password needed to connect. WebRTC uses `iceTransportPolicy: "relay"`, so every transfer consumes Metered relay bandwidth, with no direct-connection fallback. Monitor your plan's quota in Metered. Both browsers must remain open; some networks can still block connections.
 

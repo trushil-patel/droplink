@@ -10,7 +10,6 @@ import {
   File,
   Link2,
   LoaderCircle,
-  Send,
   ShieldCheck,
   UploadCloud,
   Wifi,
@@ -32,7 +31,6 @@ export default function DropLinkApp() {
   const [error, setError] = useState("");
   const [incoming, setIncoming] = useState<Request | null>(null);
   const [requestId, setRequestId] = useState("");
-  const [connected, setConnected] = useState(false);
   const [progress, setProgress] = useState(0);
   const [copied, setCopied] = useState(false);
   const socket = useRef<Socket | null>(null);
@@ -42,6 +40,7 @@ export default function DropLinkApp() {
   const channel = useRef<RTCDataChannel | null>(null);
   const pending = useRef<RTCIceCandidateInit[]>([]);
   const sender = useRef(false);
+  const outgoingFiles = useRef<File[] | null>(null);
   const requestRef = useRef("");
   const chunks = useRef<ArrayBuffer[]>([]);
   const metadata = useRef<{ name: string; size: number; mime: string } | null>(
@@ -57,12 +56,45 @@ export default function DropLinkApp() {
       }),
     [],
   );
+  const sendFiles = useCallback(async (dc: RTCDataChannel, batch: File[]) => {
+    try {
+      setProgress(0);
+      setError("");
+      const total = batch.reduce((sum, file) => sum + file.size, 0);
+      let sent = 0;
+      for (const file of batch) {
+        setStatus(`Sending ${file.name}...`);
+        dc.send(JSON.stringify({ type: "meta", name: file.name, size: file.size, mime: file.type }));
+        for (let offset = 0; offset < file.size; offset += 16384) {
+          while (dc.bufferedAmount > 4_000_000) {
+            if (dc.readyState !== "open") throw new Error("Connection closed during transfer. Please request the transfer again.");
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          }
+          const chunk = await file.slice(offset, offset + 16384).arrayBuffer();
+          if (dc.readyState !== "open") throw new Error("Connection closed during transfer. Please request the transfer again.");
+          dc.send(chunk);
+          sent += chunk.byteLength;
+          setProgress(Math.round((sent / total) * 100));
+        }
+        dc.send(JSON.stringify({ type: "end" }));
+      }
+      setProgress(100);
+      setStatus("Files sent");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not send files. Please request the transfer again.");
+      setStatus("Transfer interrupted");
+    }
+  }, []);
   const attach = useCallback((dc: RTCDataChannel) => {
     channel.current = dc;
     dc.binaryType = "arraybuffer";
     dc.onopen = () => {
-      setConnected(true);
       setStatus("Encrypted TURN connection ready");
+      if (sender.current && outgoingFiles.current) {
+        const batch = outgoingFiles.current;
+        outgoingFiles.current = null;
+        void sendFiles(dc, batch);
+      }
     };
     dc.onmessage = ({ data }) => {
       if (typeof data === "string") {
@@ -96,7 +128,7 @@ export default function DropLinkApp() {
         );
       }
     };
-  }, []);
+  }, [sendFiles]);
   const getPeer = useCallback(async () => {
     if (peer.current) return peer.current;
     if (peerLoading.current) return peerLoading.current;
@@ -197,6 +229,7 @@ export default function DropLinkApp() {
     if (!files.length) return setError("Choose at least one file.");
     setError("");
     sender.current = true;
+    outgoingFiles.current = [...files];
     socket.current?.emit("request-transfer", {
       code: targetCode,
       files: files.map((file) => ({ name: file.name, size: file.size })),
@@ -206,37 +239,12 @@ export default function DropLinkApp() {
   const accept = () => {
     if (!incoming) return;
     sender.current = false;
+    outgoingFiles.current = null;
     requestRef.current = incoming.requestId;
     setRequestId(incoming.requestId);
     socket.current?.emit("accept-transfer", { requestId: incoming.requestId });
     setStatus("Request accepted — establishing secure link…");
     setIncoming(null);
-  };
-  const sendFiles = async () => {
-    const dc = channel.current;
-    if (!dc || dc.readyState !== "open")
-      return setError("Waiting for secure connection.");
-    const total = files.reduce((sum, file) => sum + file.size, 0);
-    let sent = 0;
-    for (const file of files) {
-      dc.send(
-        JSON.stringify({
-          type: "meta",
-          name: file.name,
-          size: file.size,
-          mime: file.type,
-        }),
-      );
-      for (let offset = 0; offset < file.size; offset += 16384) {
-        while (dc.bufferedAmount > 4_000_000)
-          await new Promise((resolve) => setTimeout(resolve, 20));
-        dc.send(await file.slice(offset, offset + 16384).arrayBuffer());
-        sent += Math.min(16384, file.size - offset);
-        setProgress(Math.round((sent / total) * 100));
-      }
-      dc.send(JSON.stringify({ type: "end" }));
-    }
-    setStatus("Transfer complete");
   };
   const drop = useDropzone({
     onDrop: (accepted) => setFiles((current) => [...current, ...accepted]),
@@ -362,14 +370,6 @@ export default function DropLinkApp() {
                 </div>
               ))}
             </div>
-          )}
-          {connected && sender.current && (
-            <button
-              onClick={sendFiles}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 font-semibold text-slate-950"
-            >
-              <Send size={17} /> Send files now
-            </button>
           )}
           {progress > 0 && (
             <div className="mt-4">
