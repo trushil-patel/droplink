@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { io, Socket } from "socket.io-client";
+import CodeEditor from "./code-editor";
 import {
   Check,
   Copy,
@@ -16,7 +17,8 @@ import {
 } from "lucide-react";
 
 type FileInfo = { name: string; size: number };
-type Request = { requestId: string; from: string; files: FileInfo[] };
+type Request = { requestId: string; from: string; files: FileInfo[]; kind?: "files" | "text" };
+const CODE_MIME = "application/x-droplink-code";
 const format = (value: number) =>
   value < 1048576
     ? `${Math.ceil(value / 1024)} KB`
@@ -27,6 +29,9 @@ export default function DropLinkApp() {
   const [deviceCode, setDeviceCode] = useState("");
   const [targetCode, setTargetCode] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [mode, setMode] = useState<"files" | "text">("files");
+  const [draft, setDraft] = useState("");
+  const [receivedText, setReceivedText] = useState<string | null>(null);
   const [status, setStatus] = useState("Starting device listener…");
   const [error, setError] = useState("");
   const [incoming, setIncoming] = useState<Request | null>(null);
@@ -108,6 +113,16 @@ export default function DropLinkApp() {
           const blob = new Blob(chunks.current, {
             type: metadata.current.mime,
           });
+          if (metadata.current.mime === CODE_MIME) {
+            void blob.text().then((text) => {
+              setReceivedText(text);
+              setProgress(100);
+              setStatus("Code received — ready to copy");
+            }).catch(() => setError("Could not read received text."));
+            metadata.current = null;
+            chunks.current = [];
+            return;
+          }
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
@@ -226,13 +241,19 @@ export default function DropLinkApp() {
   const requestTransfer = () => {
     if (!/^\d{6}$/.test(targetCode) || targetCode === deviceCode)
       return setError("Enter another device’s six-digit code.");
-    if (!files.length) return setError("Choose at least one file.");
+    if (mode === "files" && !files.length) return setError("Choose at least one file.");
+    if (mode === "text" && !draft.length) return setError("Paste some code or text first.");
+    if (!socket.current?.connected) return setError("Wait for the signaling connection before sending.");
+    const batch = mode === "text"
+      ? [new globalThis.File([draft], "snippet.txt", { type: CODE_MIME })]
+      : [...files];
     setError("");
     sender.current = true;
-    outgoingFiles.current = [...files];
+    outgoingFiles.current = batch;
     socket.current?.emit("request-transfer", {
       code: targetCode,
-      files: files.map((file) => ({ name: file.name, size: file.size })),
+      kind: mode,
+      files: batch.map((file) => ({ name: file.name, size: file.size })),
     });
     setStatus("Request sent — waiting for receiver approval");
   };
@@ -337,9 +358,16 @@ export default function DropLinkApp() {
               onClick={requestTransfer}
               className="rounded-xl bg-cyan-300 px-4 text-sm font-semibold text-slate-950"
             >
-              Request
+              {mode === "text" ? "Send text" : "Request"}
             </button>
           </div>
+          <div className="mt-5 flex gap-2" aria-label="Transfer type">
+            {(["files", "text"] as const).map((tab) => <button key={tab} type="button" aria-pressed={mode === tab} onClick={() => setMode(tab)} className={`rounded-lg px-4 py-2 font-mono text-xs ${mode === tab ? "bg-cyan-300 text-slate-950" : "bg-white/5 text-slate-400"}`}>{tab === "files" ? "FILES" : "</> CODE / TEXT"}</button>)}
+          </div>
+          {mode === "text" ? <>
+            <CodeEditor label="outgoing / snippet.txt" value={draft} onChange={setDraft} />
+            <p className="mt-2 text-xs text-slate-500">Paste code, enter the device code, and send. Indentation and blank lines are preserved. The receiver accepts once.</p>
+          </> : <>
           <div
             {...drop.getRootProps()}
             className="mt-5 grid min-h-48 cursor-pointer place-items-center rounded-2xl border border-dashed border-cyan-300/25 bg-cyan-300/[.025] p-6 text-center hover:bg-cyan-300/[.06]"
@@ -371,6 +399,9 @@ export default function DropLinkApp() {
               ))}
             </div>
           )}
+          </>}
+          {receivedText !== null && <CodeEditor label="received / snippet.txt" value={receivedText} onChange={setReceivedText} />}
+          <p role="status" className="mt-4 text-xs text-cyan-200">{status}</p>
           {progress > 0 && (
             <div className="mt-4">
               <div className="mb-2 flex justify-between text-xs text-slate-400">
@@ -396,11 +427,10 @@ export default function DropLinkApp() {
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-5">
           <section className="dev-console w-full max-w-lg rounded-[28px] p-7">
             <p className="font-mono text-xs uppercase tracking-[.2em] text-cyan-300">
-              Incoming file request
+              Incoming {incoming.kind === "text" ? "code / text" : "file"} request
             </p>
             <h2 className="mt-3 text-2xl font-semibold">
-              A device wants to send {incoming.files.length} file
-              {incoming.files.length === 1 ? "" : "s"}.
+              {incoming.kind === "text" ? "A device wants to send code / text." : `A device wants to send ${incoming.files.length} file${incoming.files.length === 1 ? "" : "s"}.`}
             </h2>
             <div className="mt-5 space-y-2">
               {incoming.files.map((file) => (
@@ -424,7 +454,7 @@ export default function DropLinkApp() {
                 onClick={accept}
                 className="flex-1 rounded-xl bg-cyan-300 py-3 text-sm font-semibold text-slate-950"
               >
-                Accept & download
+                {incoming.kind === "text" ? "Accept & open editor" : "Accept & download"}
               </button>
             </div>
             <p className="mt-4 flex items-center gap-2 text-xs text-slate-500">

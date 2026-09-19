@@ -23,13 +23,13 @@ io.on('connection', socket => {
     console.log(`Device online: ${code}`);
   });
 
-  socket.on('request-transfer', ({ code, files }: { code: string; files: FileInfo[] }) => {
+  socket.on('request-transfer', ({ code, files, kind }: { code: string; files: FileInfo[]; kind?: string }) => {
     const receiverId = devices.get(code);
     if (!receiverId || !io.sockets.sockets.has(receiverId)) return socket.emit('app-error', 'That device is offline. Ask them to open DropLink.');
     if (!files?.length) return socket.emit('app-error', 'Choose at least one file.');
     const requestId = randomUUID();
     requests.set(requestId, { senderId: socket.id, receiverId, files });
-    io.to(receiverId).emit('incoming-transfer', { requestId, from: 'A trusted device', files });
+    io.to(receiverId).emit('incoming-transfer', { requestId, from: socket.data.deviceCode, files, kind: kind === 'text' ? 'text' : 'files' });
     socket.emit('request-sent');
   });
 

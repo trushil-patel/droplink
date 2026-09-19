@@ -49,6 +49,14 @@ Every push to the selected GitHub branch triggers a new Render deployment. When 
 
 ## Metered TURN configuration
 
+## Sending code or text
+
+Select **CODE / TEXT**, paste your snippet, enter the receiver's device code, and click **Send text**. The receiver clicks **Accept & open editor**; the text transfers automatically into a separate received editor with a **Copy code** button. Editors show line numbers and counts, support tab indentation, and scroll horizontally without wrapping long lines. Text is sent as chunked UTF-8 over WebRTC, preserving spaces, tabs and blank lines without formatting or executing code. Received text stays in browser memory and is lost on refresh unless copied elsewhere.
+
+Deploy both the frontend on Vercel and the updated signaling service on Render for the text-specific acceptance prompt. Refresh both devices after deployment. Run `node --test tests/text-transfer.test.mjs` to check the text encoding/chunking round trip; this does not replace a live two-device test.
+
+### TURN settings
+
 1. In Vercel, set `METERED_DOMAIN` to your Metered domain (for example `your-app.metered.live`).
 2. Set `METERED_TURN_API_KEY` to the credential-specific API key from Metered. Do not use an account master secret or add a `NEXT_PUBLIC_` prefix.
 3. Set these for each deployment environment you use, then redeploy. Keep `NEXT_PUBLIC_SIGNALING_URL` pointing to Render; TURN does not replace signaling.
