@@ -6,6 +6,12 @@ DropLink sends files and editor text directly between browsers using encrypted W
 
 ## Local development
 
+### Folder transfers
+
+In **FILES** mode, click **Choose folder**. DropLink prepares `folder-name.zip` locally, preserving the selected files' paths and subfolders. Enter the receiver code and request the transfer as usual. After acceptance, the receiver downloads one ZIP and extracts it. The ZIP is removed from the sender's list after receipt confirmation. No upload or relay server is added.
+
+Folder preparation is limited to 250 MiB and 10,000 files because it uses browser memory; less powerful devices may need smaller folders. Empty directories, permissions and symlink semantics are not preserved. Folder-picker support depends on the browser/device. If unavailable, or for larger folders, create a ZIP with your operating system and send it as a normal file. Use **Choose folder** rather than dropping a directory into the ordinary file drop zone.
+
 ```bash
 npm.cmd install
 npm.cmd run signal # Socket.IO at http://localhost:3001

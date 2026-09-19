@@ -6,6 +6,7 @@ import { io, Socket } from "socket.io-client";
 import CodeEditor from "./code-editor";
 import { getWebRtcConfig } from "../lib/webrtc-config";
 import { removeTransferredFile } from "../lib/transfer-files";
+import { createFolderArchive } from "../lib/folder-archive";
 import {
   Check,
   Copy,
@@ -31,6 +32,9 @@ export default function DropLinkApp() {
   const [deviceCode, setDeviceCode] = useState("");
   const [targetCode, setTargetCode] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [preparingFolder, setPreparingFolder] = useState(false);
+  const [folderProgress, setFolderProgress] = useState(0);
+  const folderBusy = useRef(false);
   const [mode, setMode] = useState<"files" | "text">("files");
   const [draft, setDraft] = useState("");
   const [receivedText, setReceivedText] = useState<string | null>(null);
@@ -266,6 +270,7 @@ export default function DropLinkApp() {
     };
   }, [attach, getPeer, handleSignal, signalUrl]);
   const requestTransfer = () => {
+    if (folderBusy.current) return setError("Wait for the folder to finish preparing.");
     if (!/^\d{6}$/.test(targetCode) || targetCode === deviceCode)
       return setError("Enter another device’s six-digit code.");
     if (mode === "files" && !files.length) return setError("Choose at least one file.");
@@ -293,6 +298,22 @@ export default function DropLinkApp() {
     socket.current?.emit("accept-transfer", { requestId: incoming.requestId });
     setStatus("Request accepted — establishing secure link…");
     setIncoming(null);
+  };
+  const addFolder = async (selected: File[]) => {
+    if (!selected.length || folderBusy.current) return;
+    folderBusy.current = true;
+    setPreparingFolder(true);
+    setFolderProgress(0);
+    setError("");
+    try {
+      const archive = await createFolderArchive(selected, setFolderProgress);
+      setFiles((current) => [...current, archive]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not prepare this folder. Try a smaller folder or send a ZIP.");
+    } finally {
+      folderBusy.current = false;
+      setPreparingFolder(false);
+    }
   };
   const drop = useDropzone({
     onDrop: (accepted) => setFiles((current) => [...current, ...accepted]),
@@ -383,7 +404,8 @@ export default function DropLinkApp() {
             />
             <button
               onClick={requestTransfer}
-              className="rounded-xl bg-cyan-300 px-4 text-sm font-semibold text-slate-950"
+              disabled={preparingFolder}
+              className="rounded-xl bg-cyan-300 px-4 text-sm font-semibold text-slate-950 disabled:opacity-50"
             >
               {mode === "text" ? "Send text" : "Request"}
             </button>
@@ -408,6 +430,16 @@ export default function DropLinkApp() {
               </p>
             </div>
           </div>
+          <label className="mt-3 inline-flex cursor-pointer items-center rounded-xl border border-cyan-300/25 px-4 py-2 text-sm text-cyan-200 focus-within:ring-2 focus-within:ring-cyan-300">
+            {preparingFolder ? `Preparing folder ${folderProgress}%` : "Choose folder"}
+            <input type="file" multiple {...{ webkitdirectory: "" }} aria-label="Choose folder" className="sr-only" disabled={preparingFolder}
+              onChange={(event) => {
+                const selected = Array.from(event.currentTarget.files || []);
+                event.currentTarget.value = "";
+                void addFolder(selected);
+              }} />
+          </label>
+          <p className="mt-2 text-xs text-slate-500" role="status">{preparingFolder ? "Packaging locally. Please keep this page open." : "Folders arrive as ZIP files with subfolders preserved. Up to 250 MiB / 10,000 files; empty folders are not included. If folder selection is unavailable, send a ZIP."}</p>
           {files.length > 0 && (
             <div className="mt-4 space-y-2">
               {files.map((file, index) => (
