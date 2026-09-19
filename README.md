@@ -2,7 +2,7 @@
 
 For a full explanation of the architecture, stack, pairing flow, deployment, troubleshooting, and next improvements, see [the DropLink technical guide](docs/DROPLINK_GUIDE.md).
 
-DropLink sends selected files directly between browsers using encrypted WebRTC data channels. Socket.IO only relays connection metadata; it never receives file contents.
+DropLink sends selected files between browsers using encrypted WebRTC data channels relayed through Metered TURN. Socket.IO only relays connection metadata; it never receives file contents.
 
 ## Local development
 
@@ -12,7 +12,7 @@ npm.cmd run signal # Socket.IO at http://localhost:3001
 npm.cmd run dev    # Next.js UI at http://localhost:3000
 ```
 
-Use two browsers/devices: select files on the sender, start pairing, then scan its QR code (or enter its six-digit code) on the receiver.
+Copy `.env.example` to `.env.local` and fill in your Metered settings before starting Next.js. Use two browsers/devices: select files on the sender, enter the receiver's six-digit code, request transfer, accept on the receiver, then send the files.
 
 ## Deploy the signaling server on Render
 
@@ -47,4 +47,13 @@ The Next.js frontend belongs on Vercel, but its Socket.IO signaling service must
 
 Every push to the selected GitHub branch triggers a new Render deployment. When the Vercel domain changes, update `CLIENT_ORIGIN` in Render and let Render redeploy.
 
-The included public STUN server is suitable for testing. Add an authenticated TURN server before relying on transfers across restrictive mobile, office, or carrier networks.
+## Metered TURN configuration
+
+1. In Vercel, set `METERED_DOMAIN` to your Metered domain (for example `your-app.metered.live`).
+2. Set `METERED_TURN_API_KEY` to the credential-specific API key from Metered. Do not use an account master secret or add a `NEXT_PUBLIC_` prefix.
+3. Set these for each deployment environment you use, then redeploy. Keep `NEXT_PUBLIC_SIGNALING_URL` pointing to Render; TURN does not replace signaling.
+4. Open the new deployment on two devices, one on Wi-Fi and one on mobile data. Request and accept a small file transfer, then send it. Confirm the receiver downloads the correct file.
+
+The Next.js `/api/ice-servers` endpoint fetches credentials server-side without caching or returning the API key. Browsers receive the TURN username/password needed to connect. WebRTC uses `iceTransportPolicy: "relay"`, so every transfer consumes Metered relay bandwidth, with no direct-connection fallback. Monitor your plan's quota in Metered. Both browsers must remain open; some networks can still block connections.
+
+If setup fails, the UI reports missing configuration or unavailable TURN credentials. Check Vercel variables and redeploy, then check Metered credential validity and quota. Never commit real credentials. The credential endpoint is public to support anonymous users; TURN credentials are visible to browser users, so apply provider usage limits and rotate credentials if abused.
