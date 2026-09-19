@@ -5,6 +5,7 @@ import { useDropzone } from "react-dropzone";
 import { io, Socket } from "socket.io-client";
 import CodeEditor from "./code-editor";
 import { getWebRtcConfig } from "../lib/webrtc-config";
+import { removeTransferredFile } from "../lib/transfer-files";
 import {
   Check,
   Copy,
@@ -46,9 +47,10 @@ export default function DropLinkApp() {
   const pending = useRef<RTCIceCandidateInit[]>([]);
   const sender = useRef(false);
   const outgoingFiles = useRef<File[] | null>(null);
+  const awaitingReceipt = useRef(new Map<string, { file: File; dc: RTCDataChannel }>());
   const requestRef = useRef("");
   const chunks = useRef<ArrayBuffer[]>([]);
-  const metadata = useRef<{ name: string; size: number; mime: string } | null>(
+  const metadata = useRef<{ id?: string; name: string; size: number; mime: string } | null>(
     null,
   );
   const signalUrl =
@@ -68,8 +70,10 @@ export default function DropLinkApp() {
       const total = batch.reduce((sum, file) => sum + file.size, 0);
       let sent = 0;
       for (const file of batch) {
+        const id = crypto.randomUUID();
+        awaitingReceipt.current.set(id, { file, dc });
         setStatus(`Sending ${file.name}...`);
-        dc.send(JSON.stringify({ type: "meta", name: file.name, size: file.size, mime: file.type }));
+        dc.send(JSON.stringify({ type: "meta", id, name: file.name, size: file.size, mime: file.type }));
         for (let offset = 0; offset < file.size; offset += 16384) {
           while (dc.bufferedAmount > 4_000_000) {
             if (dc.readyState !== "open") throw new Error("Connection closed during transfer. Please request the transfer again.");
@@ -86,6 +90,9 @@ export default function DropLinkApp() {
       setProgress(100);
       setStatus("Files sent");
     } catch (reason) {
+      for (const [id, receipt] of awaitingReceipt.current) {
+        if (receipt.dc === dc) awaitingReceipt.current.delete(id);
+      }
       setError(reason instanceof Error ? reason.message : "Could not send files. Please request the transfer again.");
       setStatus("Transfer interrupted");
     }
@@ -93,6 +100,11 @@ export default function DropLinkApp() {
   const attach = useCallback((dc: RTCDataChannel) => {
     channel.current = dc;
     dc.binaryType = "arraybuffer";
+    dc.onclose = () => {
+      for (const [id, receipt] of awaitingReceipt.current) {
+        if (receipt.dc === dc) awaitingReceipt.current.delete(id);
+      }
+    };
     dc.onopen = () => {
       setStatus("Encrypted direct connection ready");
       if (sender.current && outgoingFiles.current) {
@@ -104,20 +116,38 @@ export default function DropLinkApp() {
     dc.onmessage = ({ data }) => {
       if (typeof data === "string") {
         const m = JSON.parse(data);
-        if (m.type === "meta") {
+        if (m.type === "received") {
+          const receipt = awaitingReceipt.current.get(m.id);
+          if (receipt?.dc === dc) {
+            awaitingReceipt.current.delete(m.id);
+            setFiles((current) => removeTransferredFile(current, receipt.file));
+          }
+        } else if (m.type === "meta") {
           metadata.current = m;
           chunks.current = [];
           setProgress(0);
           setStatus(`Receiving ${m.name}…`);
         } else if (m.type === "end" && metadata.current) {
+          const received = metadata.current;
           const blob = new Blob(chunks.current, {
             type: metadata.current.mime,
           });
+          if (blob.size !== received.size) {
+            setError("The file was incomplete. Please request it again.");
+            metadata.current = null;
+            chunks.current = [];
+            return;
+          }
+          const acknowledge = () => {
+            if (received.id && dc.readyState === "open")
+              dc.send(JSON.stringify({ type: "received", id: received.id }));
+          };
           if (metadata.current.mime === CODE_MIME) {
             void blob.text().then((text) => {
               setReceivedText(text);
               setProgress(100);
               setStatus("Code received — ready to copy");
+              acknowledge();
             }).catch(() => setError("Could not read received text."));
             metadata.current = null;
             chunks.current = [];
@@ -131,6 +161,9 @@ export default function DropLinkApp() {
           URL.revokeObjectURL(url);
           setProgress(100);
           setStatus(`Downloaded ${metadata.current.name}`);
+          acknowledge();
+          metadata.current = null;
+          chunks.current = [];
         }
       } else if (metadata.current) {
         chunks.current.push(data);
@@ -389,6 +422,9 @@ export default function DropLinkApp() {
                   <span className="text-xs text-slate-500">
                     {format(file.size)}
                   </span>
+                  <button type="button" aria-label={`Remove ${file.name}`} className="px-2 text-slate-400 hover:text-red-300" onClick={() => setFiles((current) => removeTransferredFile(current, file))}>
+                    ×
+                  </button>
                 </div>
               ))}
             </div>
