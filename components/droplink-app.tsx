@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { io, Socket } from "socket.io-client";
 import CodeEditor from "./code-editor";
+import ThemeSwitcher from "./theme-switcher";
 import { getWebRtcConfig } from "../lib/webrtc-config";
 import { removeTransferredFile } from "../lib/transfer-files";
 import { createFolderArchive } from "../lib/folder-archive";
@@ -335,9 +336,12 @@ export default function DropLinkApp() {
             </p>
           </div>
         </div>
-        <span className="hidden items-center gap-2 font-mono text-xs text-emerald-300 sm:flex">
+        <div className="flex items-center gap-4">
+        <span className="hidden items-center gap-2 font-mono text-xs text-emerald-300 lg:flex">
           <Wifi size={15} /> {status}
         </span>
+        <ThemeSwitcher />
+        </div>
       </header>
       <section className="relative z-10 mx-auto max-w-6xl px-5 pb-12 pt-8 sm:pt-14">
         <div className="max-w-3xl">
