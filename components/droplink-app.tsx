@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { io, Socket } from "socket.io-client";
 import CodeEditor from "./code-editor";
+import { getWebRtcConfig } from "../lib/webrtc-config";
 import {
   Check,
   Copy,
@@ -40,7 +41,6 @@ export default function DropLinkApp() {
   const [copied, setCopied] = useState(false);
   const socket = useRef<Socket | null>(null);
   const peer = useRef<RTCPeerConnection | null>(null);
-  const peerLoading = useRef<Promise<RTCPeerConnection> | null>(null);
   const signalQueue = useRef<Promise<void>>(Promise.resolve());
   const channel = useRef<RTCDataChannel | null>(null);
   const pending = useRef<RTCIceCandidateInit[]>([]);
@@ -94,7 +94,7 @@ export default function DropLinkApp() {
     channel.current = dc;
     dc.binaryType = "arraybuffer";
     dc.onopen = () => {
-      setStatus("Encrypted TURN connection ready");
+      setStatus("Encrypted direct connection ready");
       if (sender.current && outgoingFiles.current) {
         const batch = outgoingFiles.current;
         outgoingFiles.current = null;
@@ -149,30 +149,21 @@ export default function DropLinkApp() {
   }, [sendFiles]);
   const getPeer = useCallback(async () => {
     if (peer.current) return peer.current;
-    if (peerLoading.current) return peerLoading.current;
-    peerLoading.current = (async () => {
-    const response = await fetch("/api/ice-servers", { cache: "no-store" });
-    const config = await response.json();
-    if (!response.ok) throw new Error(config.error || "TURN unavailable");
-    const pc = new RTCPeerConnection({
-      iceServers: config.iceServers,
-      iceTransportPolicy: "relay",
-    });
+    const pc = new RTCPeerConnection(getWebRtcConfig());
     pc.onicecandidate = (event) =>
       event.candidate &&
       relay({ type: "candidate", candidate: event.candidate.toJSON() });
     pc.ondatachannel = (event) => attach(event.channel);
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "failed")
+      if (pc.connectionState === "failed") {
+        setStatus("Direct connection failed");
         setError(
-          "TURN connection failed. Check Metered availability and remaining quota.",
+          "Could not connect directly. A router or firewall may be blocking WebRTC. Try another network and refresh both devices. TURN fallback is disabled.",
         );
+      }
     };
     peer.current = pc;
     return pc;
-    })();
-    try { return await peerLoading.current; }
-    finally { peerLoading.current = null; }
   }, [attach, relay]);
   const handleSignal = useCallback(
     async ({ payload }: { payload: any }) => {
@@ -232,7 +223,7 @@ export default function DropLinkApp() {
           payload: { type: "offer", description: offer },
         });
         } catch (reason) {
-          setError(reason instanceof Error ? reason.message : "Could not start TURN connection.");
+          setError(reason instanceof Error ? reason.message : "Could not start a direct connection.");
         }
       }
     });
@@ -298,10 +289,10 @@ export default function DropLinkApp() {
         <div className="max-w-3xl">
           <p className="font-mono text-xs uppercase tracking-[.24em] text-cyan-300">// PRIVATE_FILE_RELAY</p>
           <h2 className="mt-5 text-5xl font-semibold leading-[.95] tracking-[-.065em] sm:text-7xl">Send a file with <span className="text-cyan-300">one code.</span></h2>
-          <p className="mt-6 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">DropLink connects your browsers with encrypted WebRTC over a TURN relay. No account, no upload queue, and no cloud storage.</p>
+          <p className="mt-6 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">DropLink connects your browsers directly with encrypted WebRTC. No account, no file relay, and no cloud storage. Some networks may block direct connections.</p>
           <div className="mt-8 flex flex-wrap gap-3"><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 font-mono text-xs text-cyan-100">01 / ENTER CODE</span><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 font-mono text-xs text-cyan-100">02 / ACCEPT REQUEST</span><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 font-mono text-xs text-cyan-100">03 / DIRECT DOWNLOAD</span></div>
         </div>
-        <div className="mt-10 grid gap-3 md:grid-cols-3"><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">NO_CLOUD_BUCKET</p><p className="mt-2 text-sm text-slate-400">Encrypted files are relayed, not stored.</p></div><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">FIXED_DEVICE_CODE</p><p className="mt-2 text-sm text-slate-400">One persistent six-digit code per browser.</p></div><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">ACCEPT_ONCE</p><p className="mt-2 text-sm text-slate-400">Receiver reviews files before transfer begins.</p></div></div>
+        <div className="mt-10 grid gap-3 md:grid-cols-3"><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">NO_CLOUD_BUCKET</p><p className="mt-2 text-sm text-slate-400">Encrypted files move directly between devices.</p></div><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">FIXED_DEVICE_CODE</p><p className="mt-2 text-sm text-slate-400">One persistent six-digit code per browser.</p></div><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">ACCEPT_ONCE</p><p className="mt-2 text-sm text-slate-400">Receiver reviews files before transfer begins.</p></div></div>
       </section>
       <div className="relative z-10 mx-auto grid max-w-6xl gap-5 px-5 pb-14 lg:grid-cols-[.8fr_1.2fr]">
         <aside className="dev-console rounded-[28px] p-6">

@@ -2,7 +2,7 @@
 
 For a full explanation of the architecture, stack, pairing flow, deployment, troubleshooting, and next improvements, see [the DropLink technical guide](docs/DROPLINK_GUIDE.md).
 
-DropLink sends selected files between browsers using encrypted WebRTC data channels relayed through Metered TURN. Socket.IO only relays connection metadata; it never receives file contents.
+DropLink sends files and editor text directly between browsers using encrypted WebRTC data channels. STUN helps discover reachable addresses; no TURN relay is configured. Socket.IO only relays connection metadata; it never receives file contents.
 
 ## Local development
 
@@ -12,7 +12,7 @@ npm.cmd run signal # Socket.IO at http://localhost:3001
 npm.cmd run dev    # Next.js UI at http://localhost:3000
 ```
 
-Copy `.env.example` to `.env.local` and fill in your Metered settings before starting Next.js. Use two browsers/devices: select files on the sender, enter the receiver's six-digit code, request transfer, then accept on the receiver. The selected files start transferring automatically when the secure connection opens.
+Copy `.env.example` to `.env.local` and set NEXT_PUBLIC_SIGNALING_URL before starting Next.js. Use two browsers/devices: select files on the sender, enter the receiver's six-digit code, request transfer, then accept on the receiver. The selected files start transferring automatically when the secure connection opens.
 
 ## Deploy the signaling server on Render
 
@@ -47,21 +47,21 @@ The Next.js frontend belongs on Vercel, but its Socket.IO signaling service must
 
 Every push to the selected GitHub branch triggers a new Render deployment. When the Vercel domain changes, update `CLIENT_ORIGIN` in Render and let Render redeploy.
 
-## Metered TURN configuration
-
 ## Sending code or text
 
 Select **CODE / TEXT**, paste your snippet, enter the receiver's device code, and click **Send text**. The receiver clicks **Accept & open editor**; the text transfers automatically into a separate received editor with a **Copy code** button. Editors show line numbers and counts, support tab indentation, and scroll horizontally without wrapping long lines. Text is sent as chunked UTF-8 over WebRTC, preserving spaces, tabs and blank lines without formatting or executing code. Received text stays in browser memory and is lost on refresh unless copied elsewhere.
 
 Deploy both the frontend on Vercel and the updated signaling service on Render for the text-specific acceptance prompt. Refresh both devices after deployment. Run `node --test tests/text-transfer.test.mjs` to check the text encoding/chunking round trip; this does not replace a live two-device test.
 
-### TURN settings
+## STUN-only setup
 
-1. In Vercel, set `METERED_DOMAIN` to your Metered domain (for example `your-app.metered.live`).
-2. Set `METERED_TURN_API_KEY` to the credential-specific API key from Metered. Do not use an account master secret or add a `NEXT_PUBLIC_` prefix.
-3. Set these for each deployment environment you use, then redeploy. Keep `NEXT_PUBLIC_SIGNALING_URL` pointing to Render; TURN does not replace signaling.
-4. Open the new deployment on two devices, one on Wi-Fi and one on mobile data. Request and accept a small file transfer. It starts automatically; confirm the receiver downloads the correct file.
+1. Keep `NEXT_PUBLIC_SIGNALING_URL` set to your Render signaling URL in Vercel.
+2. TURN credentials are no longer used. You can remove `METERED_DOMAIN`, `METERED_TURN_API_KEY` and any Cloudflare TURN variables from Vercel and local environment files.
+3. Push the changes and redeploy Vercel. Render signaling needs no changes. Refresh both devices so they run the same version.
+4. Request and accept a file or text transfer. Test on the same Wi-Fi first, then on separate networks.
 
-The Next.js `/api/ice-servers` endpoint fetches credentials server-side without caching or returning the API key. Browsers receive the TURN username/password needed to connect. WebRTC uses `iceTransportPolicy: "relay"`, so every transfer consumes Metered relay bandwidth, with no direct-connection fallback. Monitor your plan's quota in Metered. Both browsers must remain open; some networks can still block connections.
+The browser uses `stun:stun.l.google.com:19302` and `iceTransportPolicy: "all"` with no TURN servers. There is no credential API call or paid relay fallback. Render still exchanges pairing, request and connection metadata, but does not carry file/text contents. Existing fixed device codes and automatic sending after acceptance are unchanged.
 
-If setup fails, the UI reports missing configuration or unavailable TURN credentials. Check Vercel variables and redeploy, then check Metered credential validity and quota. Never commit real credentials. The credential endpoint is public to support anonymous users; TURN credentials are visible to browser users, so apply provider usage limits and rotate credentials if abused.
+Different networks can connect when their NAT/router/firewall rules permit it. STUN does not guarantee connectivity. If connection establishment fails, try another network and refresh both pages; the app reports that TURN fallback is disabled. Both browsers must remain open. Direct connections can reveal network addresses to the other device.
+
+Run `node --import tsx --test tests/webrtc-config.test.ts tests/text-transfer.test.mjs` to verify STUN-only configuration and text-format preservation. Live two-device testing is still required. To inspect the selected path, use browser WebRTC diagnostics such as `chrome://webrtc-internals`; the selected pair should not contain a `relay` candidate.
