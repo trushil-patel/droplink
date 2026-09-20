@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
-import { parseTheme, resolveTheme, type ThemePreference } from "../lib/theme";
+import { Moon, Sun } from "lucide-react";
+import { parseTheme, type ThemePreference } from "../lib/theme";
 
 export default function ThemeSwitcher() {
   const [preference, setPreference] = useState<ThemePreference | null>(null);
   useEffect(() => {
     try { setPreference(parseTheme(localStorage.getItem("droplink-theme"))); }
-    catch { setPreference("system"); }
+    catch { setPreference("light"); }
     const sync = (event: StorageEvent) => {
       if (event.key === "droplink-theme" || event.key === null) setPreference(parseTheme(event.newValue));
     };
@@ -15,21 +16,19 @@ export default function ThemeSwitcher() {
   }, []);
   useEffect(() => {
     if (!preference) return;
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => { document.documentElement.dataset.theme = resolveTheme(preference, media.matches); };
-    apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
+    document.documentElement.dataset.theme = preference;
   }, [preference]);
-  return <label className="flex shrink-0 items-center gap-2 text-xs text-slate-400">
-    <span className="hidden sm:inline">Theme</span>
-    <select aria-label="Color theme" value={preference || "system"} className="theme-select rounded-xl border px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-      onChange={(event) => {
-        const next = parseTheme(event.target.value);
+  const dark = preference === "dark";
+  return <button type="button" aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
+    title={dark ? "Switch to light theme" : "Switch to dark theme"}
+    disabled={preference === null}
+    className="theme-select grid h-11 w-11 shrink-0 place-items-center rounded-full border shadow-sm outline-none hover:scale-105 focus-visible:ring-2 focus-visible:ring-cyan-300 motion-reduce:transform-none"
+      onClick={() => {
+        const next = dark ? "light" : "dark";
         setPreference(next);
+        document.documentElement.dataset.theme = next;
         try { localStorage.setItem("droplink-theme", next); } catch {}
       }}>
-      <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
-    </select>
-  </label>;
+      {dark ? <Sun size={20} strokeWidth={1.8} aria-hidden="true" /> : <Moon size={20} strokeWidth={1.8} aria-hidden="true" />}
+  </button>;
 }

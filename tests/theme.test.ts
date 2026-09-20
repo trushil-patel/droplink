@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseTheme, resolveTheme, themeBootstrap } from "../lib/theme";
+import { parseTheme, themeBootstrap } from "../lib/theme";
 
-test("theme follows system unless explicitly selected", () => {
-  assert.equal(parseTheme(null), "system");
-  assert.equal(parseTheme("invalid"), "system");
-  assert.equal(resolveTheme("system", true), "dark");
-  assert.equal(resolveTheme("system", false), "light");
-  assert.equal(resolveTheme("light", true), "light");
-  assert.equal(resolveTheme("dark", false), "dark");
+test("theme defaults to light, including old system preferences", () => {
+  assert.equal(parseTheme(null), "light");
+  assert.equal(parseTheme("invalid"), "light");
+  assert.equal(parseTheme("system"), "light");
+  assert.equal(parseTheme("light"), "light");
+  assert.equal(parseTheme("dark"), "dark");
 });
 test("bootstrap respects saved choices and survives denied storage", () => {
   for (const saved of ["light", "dark", "system", "invalid", null]) {
@@ -16,7 +15,7 @@ test("bootstrap respects saved choices and survives denied storage", () => {
       const document = { documentElement: { dataset: {} as Record<string, string> } };
       new Function("localStorage", "window", "document", themeBootstrap)(
         { getItem: () => saved }, { matchMedia: () => ({ matches: dark }) }, document);
-      assert.equal(document.documentElement.dataset.theme, resolveTheme(parseTheme(saved), dark));
+      assert.equal(document.documentElement.dataset.theme, parseTheme(saved));
     }
   }
   const document = { documentElement: { dataset: {} as Record<string, string> } };
