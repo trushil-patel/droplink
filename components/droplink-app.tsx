@@ -41,12 +41,14 @@ export default function DropLinkApp() {
   const [receivedText, setReceivedText] = useState<string | null>(null);
   const [status, setStatus] = useState("Starting device listener…");
   const [error, setError] = useState("");
+  const [connectionWarning, setConnectionWarning] = useState("");
   const [incoming, setIncoming] = useState<Request | null>(null);
   const [requestId, setRequestId] = useState("");
   const [progress, setProgress] = useState(0);
   const [copied, setCopied] = useState(false);
   const socket = useRef<Socket | null>(null);
   const peer = useRef<RTCPeerConnection | null>(null);
+  const peerLoading = useRef<Promise<RTCPeerConnection> | null>(null);
   const signalQueue = useRef<Promise<void>>(Promise.resolve());
   const channel = useRef<RTCDataChannel | null>(null);
   const pending = useRef<RTCIceCandidateInit[]>([]);
@@ -111,7 +113,7 @@ export default function DropLinkApp() {
       }
     };
     dc.onopen = () => {
-      setStatus("Encrypted direct connection ready");
+      setStatus("Encrypted WebRTC connection ready");
       if (sender.current && outgoingFiles.current) {
         const batch = outgoingFiles.current;
         outgoingFiles.current = null;
@@ -187,21 +189,39 @@ export default function DropLinkApp() {
   }, [sendFiles]);
   const getPeer = useCallback(async () => {
     if (peer.current) return peer.current;
-    const pc = new RTCPeerConnection(getWebRtcConfig());
+    if (peerLoading.current) return peerLoading.current;
+    const owner = socket.current;
+    peerLoading.current = (async () => {
+    let config = getWebRtcConfig();
+    try {
+      const response = await fetch("/api/ice-servers", { cache: "no-store", signal: AbortSignal.timeout(10000) });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data.iceServers) || !data.iceServers.length)
+        throw new Error(data.error || "TURN fallback configuration unavailable.");
+      config = getWebRtcConfig(data.iceServers);
+      setConnectionWarning("");
+    } catch (reason) {
+      setConnectionWarning(`${reason instanceof Error ? reason.message : "TURN fallback unavailable."} Trying direct connection only; restricted networks may not connect.`);
+    }
+    if (socket.current !== owner || !owner?.connected) throw new Error("Signaling disconnected. Refresh both devices and request the transfer again.");
+    const pc = new RTCPeerConnection(config);
     pc.onicecandidate = (event) =>
       event.candidate &&
       relay({ type: "candidate", candidate: event.candidate.toJSON() });
     pc.ondatachannel = (event) => attach(event.channel);
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "failed") {
-        setStatus("Direct connection failed");
+        setStatus("Connection failed");
         setError(
-          "Could not connect directly. A router or firewall may be blocking WebRTC. Try another network and refresh both devices. TURN fallback is disabled.",
+          "Could not establish a connection. Check the Metered credential and quota, or try another network. Some institutional networks block TURN as well.",
         );
       }
     };
     peer.current = pc;
     return pc;
+    })();
+    try { return await peerLoading.current; }
+    finally { peerLoading.current = null; }
   }, [attach, relay]);
   const handleSignal = useCallback(
     async ({ payload }: { payload: any }) => {
@@ -261,7 +281,7 @@ export default function DropLinkApp() {
           payload: { type: "offer", description: offer },
         });
         } catch (reason) {
-          setError(reason instanceof Error ? reason.message : "Could not start a direct connection.");
+          setError(reason instanceof Error ? reason.message : "Could not start a WebRTC connection.");
         }
       }
     });
@@ -347,10 +367,10 @@ export default function DropLinkApp() {
         <div className="max-w-3xl">
           <p className="font-mono text-xs uppercase tracking-[.24em] text-cyan-300">// PRIVATE_FILE_RELAY</p>
           <h2 className="mt-5 text-5xl font-semibold leading-[.95] tracking-[-.065em] sm:text-7xl">Send a file with <span className="text-cyan-300">one code.</span></h2>
-          <p className="mt-6 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">DropLink connects your browsers directly with encrypted WebRTC. No account, no file relay, and no cloud storage. Some networks may block direct connections.</p>
+          <p className="mt-6 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">Encrypted WebRTC connects your devices directly when possible, with TURN relay support for restricted networks. No account and no cloud storage.</p>
           <div className="mt-8 flex flex-wrap gap-3"><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 font-mono text-xs text-cyan-100">01 / ENTER CODE</span><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 font-mono text-xs text-cyan-100">02 / ACCEPT REQUEST</span><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 font-mono text-xs text-cyan-100">03 / DIRECT DOWNLOAD</span></div>
         </div>
-        <div className="mt-10 grid gap-3 md:grid-cols-3"><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">NO_CLOUD_BUCKET</p><p className="mt-2 text-sm text-slate-400">Encrypted files move directly between devices.</p></div><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">FIXED_DEVICE_CODE</p><p className="mt-2 text-sm text-slate-400">One persistent six-digit code per browser.</p></div><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">ACCEPT_ONCE</p><p className="mt-2 text-sm text-slate-400">Receiver reviews files before transfer begins.</p></div></div>
+        <div className="mt-10 grid gap-3 md:grid-cols-3"><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">NO_CLOUD_BUCKET</p><p className="mt-2 text-sm text-slate-400">Encrypted files are transferred, not stored.</p></div><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">FIXED_DEVICE_CODE</p><p className="mt-2 text-sm text-slate-400">One persistent six-digit code per browser.</p></div><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">ACCEPT_ONCE</p><p className="mt-2 text-sm text-slate-400">Receiver reviews files before transfer begins.</p></div></div>
       </section>
       <div className="relative z-10 mx-auto grid max-w-6xl gap-5 px-5 pb-14 lg:grid-cols-[.8fr_1.2fr]">
         <aside className="dev-console rounded-[28px] p-6">
@@ -487,6 +507,7 @@ export default function DropLinkApp() {
               {error}
             </p>
           )}
+          {connectionWarning && <p role="status" className="mt-4 rounded-xl border border-cyan-300/25 p-3 text-sm text-slate-400">{connectionWarning}</p>}
         </section>
       </div>
       {incoming && (
@@ -524,7 +545,7 @@ export default function DropLinkApp() {
               </button>
             </div>
             <p className="mt-4 flex items-center gap-2 text-xs text-slate-500">
-              <ShieldCheck size={14} /> Direct WebRTC transfer — files do not
+              <ShieldCheck size={14} /> Encrypted WebRTC transfer — files do not
               pass through Render.
             </p>
           </section>
