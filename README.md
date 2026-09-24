@@ -1,5 +1,11 @@
 # DropLink
 
+## Live or send for later
+
+Choose **Live transfer** for the existing WebRTC flow, or **Send for later** for browser-encrypted temporary storage when devices are online at different times. Offline mode needs a Supabase project and Vercel server variables; follow [OFFLINE_SETUP.md](OFFLINE_SETUP.md) and run [supabase/offline.sql](supabase/offline.sql).
+
+Offline requests use a separate inbox code, a private browser credential and encryption keys. The receiver must create its inbox once before going offline. Clearing browser data loses access. Initial limits: 25 MiB per item and a 24-hour download window. Live transfer remains available without configuring offline mode. No cloud deployment has been provisioned by these code changes.
+
 For a full explanation of the architecture, stack, pairing flow, deployment, troubleshooting, and next improvements, see [the DropLink technical guide](docs/DROPLINK_GUIDE.md).
 
 DropLink sends files and editor text using encrypted WebRTC data channels. Direct connections are allowed, with Metered TURN fallback for restricted networks. Socket.IO only relays connection metadata; it never receives file contents.

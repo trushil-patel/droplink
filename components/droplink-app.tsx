@@ -5,6 +5,7 @@ import { useDropzone } from "react-dropzone";
 import { io, Socket } from "socket.io-client";
 import CodeEditor from "./code-editor";
 import ThemeSwitcher from "./theme-switcher";
+import LaterTransfer from "./later-transfer";
 import { getWebRtcConfig } from "../lib/webrtc-config";
 import { removeTransferredFile } from "../lib/transfer-files";
 import { createFolderArchive } from "../lib/folder-archive";
@@ -30,6 +31,7 @@ const format = (value: number) =>
 const newCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
 export default function DropLinkApp() {
+  const [deliveryMode, setDeliveryMode] = useState<"live" | "later">("live");
   const [deviceCode, setDeviceCode] = useState("");
   const [targetCode, setTargetCode] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -367,11 +369,17 @@ export default function DropLinkApp() {
         <div className="max-w-3xl">
           <p className="font-mono text-xs uppercase tracking-[.24em] text-cyan-300">// PRIVATE_FILE_RELAY</p>
           <h2 className="mt-5 text-5xl font-semibold leading-[.95] tracking-[-.065em] sm:text-7xl">Send a file with <span className="text-cyan-300">one code.</span></h2>
-          <p className="mt-6 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">Encrypted WebRTC connects your devices directly when possible, with TURN relay support for restricted networks. No account and no cloud storage.</p>
+          <p className="mt-6 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">Transfer live with WebRTC, or send encrypted files to a temporary inbox for later. No account required.</p>
           <div className="mt-8 flex flex-wrap gap-3"><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 font-mono text-xs text-cyan-100">01 / ENTER CODE</span><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 font-mono text-xs text-cyan-100">02 / ACCEPT REQUEST</span><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 font-mono text-xs text-cyan-100">03 / DIRECT DOWNLOAD</span></div>
         </div>
-        <div className="mt-10 grid gap-3 md:grid-cols-3"><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">NO_CLOUD_BUCKET</p><p className="mt-2 text-sm text-slate-400">Encrypted files are transferred, not stored.</p></div><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">FIXED_DEVICE_CODE</p><p className="mt-2 text-sm text-slate-400">One persistent six-digit code per browser.</p></div><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">ACCEPT_ONCE</p><p className="mt-2 text-sm text-slate-400">Receiver reviews files before transfer begins.</p></div></div>
+        <div className="mt-10 grid gap-3 md:grid-cols-3"><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">CHOOSE_YOUR_MODE</p><p className="mt-2 text-sm text-slate-400">Live connections or encrypted temporary storage.</p></div><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">FIXED_DEVICE_CODE</p><p className="mt-2 text-sm text-slate-400">One persistent six-digit code per browser.</p></div><div className="glass rounded-2xl p-4"><p className="font-mono text-xs text-cyan-300">ACCEPT_ONCE</p><p className="mt-2 text-sm text-slate-400">Receiver reviews files before transfer begins.</p></div></div>
       </section>
+      <nav aria-label="Delivery mode" className="relative z-10 mx-auto mb-5 flex max-w-6xl gap-3 px-5">
+        <button aria-pressed={deliveryMode === "live"} onClick={() => setDeliveryMode("live")} className={`rounded-xl px-4 py-3 text-sm ${deliveryMode === "live" ? "bg-cyan-300 text-slate-950" : "glass"}`}>Live transfer</button>
+        <button aria-pressed={deliveryMode === "later"} onClick={() => setDeliveryMode("later")} className={`rounded-xl px-4 py-3 text-sm ${deliveryMode === "later" ? "bg-cyan-300 text-slate-950" : "glass"}`}>Send for later</button>
+      </nav>
+      <LaterTransfer active={deliveryMode === "later"} onOpen={() => setDeliveryMode("later")} />
+      <div hidden={deliveryMode !== "live"}>
       <div className="relative z-10 mx-auto grid max-w-6xl gap-5 px-5 pb-14 lg:grid-cols-[.8fr_1.2fr]">
         <aside className="dev-console rounded-[28px] p-6">
           <p className="font-mono text-xs uppercase tracking-[.2em] text-cyan-300">
@@ -509,6 +517,7 @@ export default function DropLinkApp() {
           )}
           {connectionWarning && <p role="status" className="mt-4 rounded-xl border border-cyan-300/25 p-3 text-sm text-slate-400">{connectionWarning}</p>}
         </section>
+      </div>
       </div>
       {incoming && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-5">
