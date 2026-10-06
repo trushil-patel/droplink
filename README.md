@@ -26,6 +26,10 @@ npm.cmd run dev    # Next.js UI at http://localhost:3000
 
 Copy `.env.example` to `.env.local` and set NEXT_PUBLIC_SIGNALING_URL before starting Next.js. Use two browsers/devices: select files on the sender, enter the receiver's six-digit code, request transfer, then accept on the receiver. The selected files start transferring automatically when the secure connection opens.
 
+## Vercel Web Analytics
+
+The frontend includes Vercel Web Analytics in the root layout to track page views. In the Vercel project dashboard, open **Analytics**, click **Enable**, then deploy the updated frontend. Visit the deployed site to start collecting page views; development mode does not send analytics data. See the [Vercel Web Analytics setup guide](https://vercel.com/docs/analytics/quickstart).
+
 ## Deploy the signaling server on Render
 
 The Next.js frontend belongs on Vercel, but its Socket.IO signaling service must run on a host that supports persistent WebSocket connections. These steps deploy only the signaling service to Render.
